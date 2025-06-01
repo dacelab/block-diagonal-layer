@@ -21,7 +21,7 @@ This layer is useful for a variety of applications, including ensemble implicit 
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/block-diagonal-layer.git
+git clone https://github.com/dacelab/block-diagonal-layer.git
 cd block-diagonal-layer
 
 # Install dependencies
