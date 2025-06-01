@@ -48,11 +48,7 @@ model = nn.Sequential(
         num_networks=num_networks,
         input_features_per_network=architecture[0],
         output_features_per_network=architecture[1],
-        activation=nn.ReLU(),
-        use_bias=True,
-        weight_init_method="pytorch_default",
-        weight_init_params=None
-        bias_init_method="pytorch_default"
+        activation=nn.ReLU()
     ),
     
     # Layer 2: 50 -> 50 (with Xavier initialization)
@@ -60,11 +56,7 @@ model = nn.Sequential(
         num_networks=num_networks,
         input_features_per_network=architecture[1],
         output_features_per_network=architecture[2],
-        activation=nn.ReLU(),
-        use_bias=True,
-        weight_init_method="pytorch_default",
-        weight_init_params=None,
-        bias_init_method="zeros"
+        activation=nn.ReLU()
     ),
     
     # Layer 3: 50 -> 2 (with SIREN initialization for final layer)
@@ -72,11 +64,7 @@ model = nn.Sequential(
         num_networks=num_networks,
         input_features_per_network=architecture[2],
         output_features_per_network=architecture[3],
-        activation=nn.Identity(),  # No activation for output layer
-        use_bias=True,
-        weight_init_method="pytorch_default",
-        weight_init_params= None,
-        bias_init_method="pytorch_default"
+        activation=nn.Identity(),  
     )
 )
 
@@ -112,7 +100,7 @@ activation_fn = create_activation_module('spder_arctan', 30.0)
 
 Also supports different frequency parameter for each decoupled MLP when using SIREN or SPDER (with abs and arctan damping); see doc string for details.
 
-### Weight Initialization Methods
+### Weights and Bias Initialization Methods
 
 ```python
 # PyTorch default 
@@ -132,6 +120,12 @@ weight_init_params={"mode": "fan_out", "nonlinearity": "relu"}
 
 weight_init_method="normal"
 weight_init_params={"mean": 0.0, "std": 0.01}
+```
+
+```python
+# Bias initialization options
+bias_init_method ="pytorch_default"
+bias_init_method ="zeros"
 ```
 
 ### Input Tensor Formats
