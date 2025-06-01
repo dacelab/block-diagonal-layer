@@ -112,7 +112,6 @@ class BlockDiagonalLayer(nn.Module):
             output tensor of shape (batch_size, num_networks * output_features_per_network).
 
     Raises:
-        Raises:
         ValueError: If `num_networks`, `input_features_per_network`, or `output_features_per_network` are not positive.
         ValueError: If `activation` is not provided, not an `nn.Module`, or invalid string value.
         ValueError: If heterogeneous INR activation is used but weight_init_method is not 'siren_first' or 'siren_hidden'.
@@ -222,7 +221,7 @@ class BlockDiagonalLayer(nn.Module):
             else:
                 raise TypeError(
                     "weight_init_params must be a number (for siren_hidden), dict, list of floats "
-                    "(for heterogeneous_siren), or None."
+                    "(for heterogeneous_siren, heterogeneous_spder_abs, heterogenous_spder_arctan), or None."
                 )
 
         self._validate_init_method()
@@ -507,7 +506,8 @@ def _batched_matvec_general(weights, x):
 
 class _HeterogeneousINRActivation(nn.Module):
     """
-    Internal class for heterogeneous SIREN and SPDER activations with different omega values per network.
+    Internal class for heterogeneous SIREN and SPDER (abs and arctan damping) activations with
+    different omega values per network.
     """
 
     def __init__(
@@ -555,7 +555,7 @@ class _HeterogeneousINRActivation(nn.Module):
         """
         Pure function for SPDER activation: sin(omega * x) * sqrt(|omega * x|)
         """
-        eps = 1e-6
+        eps = torch.tensor(1e-6)
         scaled_x = omega * x
         return torch.sin(scaled_x) * torch.sqrt(torch.maximum(torch.abs(scaled_x), eps))
 
@@ -577,7 +577,7 @@ class _HeterogeneousINRActivation(nn.Module):
             x: Input tensor of shape (batch_size, num_networks * output_features_per_network)
 
         Returns:
-            Output tensor of same shape with SIREN activations applied per network
+            Output tensor of same shape with heterogeneous INR activations applied per network
         """
         batch_size = x.shape[0]
 

@@ -1,3 +1,11 @@
+# Test suite for BlockDiagonalLayer
+#
+# June 1, 2025: Refactored tests for standalone usage of BlockDiagonalLayer &
+#               basic tests for heterogeneous INR activations.
+#
+# Prasanth B. Nair, prasanth.nair@utoronto.ca
+# University of Toronto Institute for Aerospace Studies (UTIAS)
+
 import pytest
 import torch
 import torch.nn as nn
@@ -190,7 +198,6 @@ def test_xavier_initialization(default_params):
     params["weight_init_params"] = {"gain": 1.0}
 
     layer = BlockDiagonalLayer(**params)
-    # Just verify it initializes without error
     assert layer.weight is not None
 
 
@@ -212,18 +219,18 @@ def test_invalid_input_shapes(default_params, input_shape, expected_error_msg):
         layer(x)
 
 
-def test_3d_input_support(default_params):
-    """Test that 3D input works correctly and produces same results as 2D input."""
+def test_3d_tensor_input_support(default_params):
+    """
+    Test that forward pass with 3D tensor input works correctly and produces same results as 2D tensor input.
+    """
     layer = BlockDiagonalLayer(**default_params)
     batch_size = 32
 
-    # 2D input: (batch_size, num_networks * input_features_per_network)
     x_2d = torch.randn(
         batch_size,
         default_params["num_networks"] * default_params["input_features_per_network"],
     )
 
-    # 3D input: (batch_size, num_networks, input_features_per_network)
     x_3d = x_2d.view(
         batch_size,
         default_params["num_networks"],
@@ -235,13 +242,131 @@ def test_3d_input_support(default_params):
 
     assert torch.allclose(
         output_2d, output_3d, atol=1e-6
-    ), "2D and 3D inputs should produce identical outputs"
+    ), "2D and 3D tensor inputs should produce identical outputs"
+
+
+def test_heterogeneous_inr_activations():
+    """
+    Test heterogeneous INR activations (SIREN and SPDER variants) work correctly.
+    TODO: Add additional tests for deep ensembles to check statistical properties.
+    """
+    set_seed(42)
+
+    num_networks = 4
+    input_feats = 2
+    output_feats = 8
+    batch_size = 16
+    omega_values = [10.0, 30.0, 50.0, 100.0]
+
+    activations_to_test = [
+        "heterogeneous_siren",
+        "heterogeneous_spder_abs",
+        "heterogeneous_spder_arctan",
+    ]
+
+    for activation_type in activations_to_test:
+
+        layer_first = BlockDiagonalLayer(
+            num_networks=num_networks,
+            input_features_per_network=input_feats,
+            output_features_per_network=output_feats,
+            activation=activation_type,
+            weight_init_method="siren_first",
+            weight_init_params=omega_values,
+            use_bias=True,
+        )
+
+        layer_hidden = BlockDiagonalLayer(
+            num_networks=num_networks,
+            input_features_per_network=input_feats,
+            output_features_per_network=output_feats,
+            activation=activation_type,
+            weight_init_method="siren_hidden",
+            weight_init_params=omega_values,
+            use_bias=True,
+        )
+
+        assert hasattr(
+            layer_first, "_omega_values"
+        ), f"_omega_values not found for {activation_type}"
+        assert (
+            layer_first._omega_values == omega_values
+        ), f"Omega values not stored correctly for {activation_type}"
+        assert (
+            layer_hidden._omega_values == omega_values
+        ), f"Omega values not stored correctly for {activation_type}"
+
+        x = torch.randn(batch_size, num_networks * input_feats)
+
+        output_first = layer_first(x)
+        output_hidden = layer_hidden(x)
+
+        expected_shape = (batch_size, num_networks * output_feats)
+        assert (
+            output_first.shape == expected_shape
+        ), f"Wrong output shape for {activation_type} with siren_first"
+        assert (
+            output_hidden.shape == expected_shape
+        ), f"Wrong output shape for {activation_type} with siren_hidden"
+
+
+def test_heterogeneous_inr_validation():
+    """
+    Test validation for heterogeneous INR activations.
+    """
+    num_networks = 3
+    input_feats = 2
+    output_feats = 4
+
+    with pytest.raises(
+        ValueError, match="Heterogeneous INR activations.*require weight_init_method"
+    ):
+        BlockDiagonalLayer(
+            num_networks=num_networks,
+            input_features_per_network=input_feats,
+            output_features_per_network=output_feats,
+            activation="heterogeneous_siren",
+            weight_init_method="pytorch_default",  # Should fail
+            weight_init_params=[10.0, 20.0, 30.0],
+        )
+
+    with pytest.raises(
+        ValueError, match="weight_init_params must be provided as a list"
+    ):
+        BlockDiagonalLayer(
+            num_networks=num_networks,
+            input_features_per_network=input_feats,
+            output_features_per_network=output_feats,
+            activation="heterogeneous_siren",
+            weight_init_method="siren_hidden",
+            weight_init_params=None,  # Should fail
+        )
+
+    with pytest.raises(ValueError, match="weight_init_params must have length"):
+        BlockDiagonalLayer(
+            num_networks=num_networks,
+            input_features_per_network=input_feats,
+            output_features_per_network=output_feats,
+            activation="heterogeneous_siren",
+            weight_init_method="siren_hidden",
+            weight_init_params=[10.0, 20.0],  # Should be 3 values, not 2
+        )
+
+    with pytest.raises(ValueError, match="All omega values.*must be positive"):
+        BlockDiagonalLayer(
+            num_networks=num_networks,
+            input_features_per_network=input_feats,
+            output_features_per_network=output_feats,
+            activation="heterogeneous_siren",
+            weight_init_method="siren_hidden",
+            weight_init_params=[10.0, -20.0, 30.0],  # Should fail due to negative value
+        )
 
 
 def test_functional_equivalence_and_gradients(default_params):
     """
     Test to check that the outputs and gradients of BlockDiagonalLayer are equivalent to those
-    computed by a stack of nn.Linear layers.
+    computed by looping over a stack of nn.Linear layers.
     """
     set_seed(42)
 
@@ -522,12 +647,12 @@ class TestPerformance:
         block_gflops = (total_ops * num_iterations / 1e9) / block_time
         for_loop_gflops = (total_ops * num_iterations / 1e9) / for_loop_time
 
-        print(f"\n{'Method':<15} {'Time (ms)':<12} {'GFLOPS':<10}")
+        print(f"{'Method':<15} {'Time (ms)':<12} {'GFLOPS':<10}")
         print(f"{'-'*36}")
         print(f"{'BlockDiagonal':<15} {block_avg_ms:<12.3f} {block_gflops:<10.1f} ")
         print(f"{'For-loop':<15} {for_loop_avg_ms:<12.3f} {for_loop_gflops:<10.1f} ")
         print(
-            f"\nBlockDiagonal is {speedup:.2f}x faster than a for-loop ({block_gflops/for_loop_gflops:.2f}x throughput)"
+            f"BlockDiagonal is {speedup:.2f}x faster than a for-loop ({block_gflops/for_loop_gflops:.2f}x throughput)"
         )
 
         if device.type == "cuda":
