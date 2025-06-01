@@ -64,7 +64,7 @@ model = nn.Sequential(
         num_networks=num_networks,
         input_features_per_network=architecture[2],
         output_features_per_network=architecture[3],
-        activation=nn.Identity(),  
+        activation=nn.Identity()
     )
 )
 
@@ -147,6 +147,15 @@ output_3d = layer(x_3d)
 
 ```
 
+## Testing
+
+
+```bash
+pytest -v --capture=no
+```
+
+The test suite includes: Checks for equivalence with a list of standard `nn.Linear` layers, Gradient correctness verification, Performance benchmarks, and GPU utilization tests
+
 ## Performance Benchmarks
 
 Performance comparison on **NVIDIA GeForce RTX 4090** showing speedups over a for-loop implementation:
@@ -159,14 +168,6 @@ Performance comparison on **NVIDIA GeForce RTX 4090** showing speedups over a fo
 
 *BlockDiagonalLayer is designed for architectures involving thousands of decoupled MLPs where massive parallelization provides substantial computational advantages.*
 
-## Testing
-
-
-```bash
-pytest -v --capture=no
-```
-
-The test suite includes: Checks for equivalence with a list of standard `nn.Linear` layers, Gradient correctness verification, Performance benchmarks, and GPU utilization tests
 
 ## Applications
 
